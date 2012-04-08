@@ -7,6 +7,7 @@
 ### Copyright: the only free-as-in-freedom one: MIT license
 ###
 
+import logging
 import sys, os, pyinotify
 from optparse import OptionParser
 
@@ -16,6 +17,7 @@ parser.add_option("--debug", help="print debug messages", action="store_true", d
 
 myfile = args[0] 
 if options.debug:
+    logging.basicConfig(level=logging.DEBUG)
     print "I am totally opening " + myfile 
 
 wm = pyinotify.WatchManager()
@@ -28,13 +30,26 @@ global fh
 fh = open(myfile, 'r')
 fh.seek(0,2)
     
+
 # the event handlers:
 class PTmp(pyinotify.ProcessEvent):
+
+    def __init__(self):
+        self.last_position_in_file = 0
+        pyinotify.ProcessEvent.__init__(self)
+
     def process_IN_MODIFY(self, event):
         if myfile not in os.path.join(event.path, event.name):
             return
         else:
+            curr_size = os.fstat(fh.fileno()).st_size
+            if curr_size < self.last_position_in_file:
+                logging.debug("File was truncated! re-seeking to position 0.")
+                self.last_position_in_file = 0
+                fh.seek(0)
+
     	    print fh.readline().rstrip()
+            self.last_position_in_file = fh.tell()
     
     def process_IN_MOVE_SELF(self, event):
         if options.debug:
